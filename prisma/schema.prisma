@@ -1,0 +1,121 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  DIRECTOR
+  COORDINATOR
+  VOLUNTEER
+}
+
+enum ScheduleStatus {
+  PENDING
+  CONFIRMED
+  SWAP_REQUESTED
+}
+
+enum ConfirmationStatus {
+  PENDING
+  CONFIRMED
+  DECLINED
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  passwordHash String
+  phone     String?
+  cpf       String?  @unique
+  rg        String?
+  role      Role     @default(VOLUNTEER)
+
+  address   Address?
+  ministries UserMinistry[]
+  createdSchedules Schedule[] @relation("CreatedSchedules")
+  scheduleParticipations ScheduleVolunteer[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Address {
+  id           Int    @id @default(autoincrement())
+  street       String
+  number       String?
+  complement   String?
+  neighborhood String?
+  city         String
+  state        String
+  zipCode      String
+
+  userId Int  @unique
+  user   User @relation(fields: [userId], references: [id])
+}
+
+model Ministry {
+  id          Int    @id @default(autoincrement())
+  name        String @unique
+  description String?
+  color       String?
+  isActive    Boolean @default(true)
+
+  users     UserMinistry[]
+  schedules Schedule[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model UserMinistry {
+  id          Int  @id @default(autoincrement())
+  userId      Int
+  ministryId  Int
+  isCoordinator Boolean @default(false)
+
+  user     User     @relation(fields: [userId], references: [id])
+  ministry Ministry @relation(fields: [ministryId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, ministryId])
+}
+
+model Schedule {
+  id             Int      @id @default(autoincrement())
+  type           String
+  date           DateTime
+  time           String
+  notes          String?
+  
+  createdById    Int
+  createdBy      User @relation("CreatedSchedules", fields: [createdById], references: [id])
+
+  ministryId     Int
+  ministry       Ministry @relation(fields: [ministryId], references: [id])
+
+  volunteers     ScheduleVolunteer[]
+
+  createdAt      DateTime @default(now())
+}
+
+model ScheduleVolunteer {
+  id                 Int    @id @default(autoincrement())
+  scheduleId         Int
+  volunteerId        Int
+  confirmationStatus ConfirmationStatus @default(PENDING)
+  swapRequested      Boolean @default(false)
+
+  schedule   Schedule @relation(fields: [scheduleId], references: [id])
+  volunteer  User     @relation(fields: [volunteerId], references: [id])
+
+  createdAt  DateTime @default(now())
+
+  @@unique([scheduleId, volunteerId])
+}
+
