@@ -1,5 +1,3 @@
-// src/index.ts
-
 import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
@@ -9,15 +7,16 @@ import authRoutes from './routes/auth.js';
 import ministryRoutes from './routes/ministry.js';
 import memberRoutes from './routes/member.js';
 import scheduleRoutes from './routes/schedule.js';
+import reportRoutes from './routes/report.js'; // <-- ADICIONE ESTA LINHA
 
 // --- INICIALIZAÇÃO ---
 export const prisma = new PrismaClient();
-const app: Express = express(); // <-- A definição de 'app' estava em falta
-const PORT = process.env.PORT || 3001; // <-- A definição de 'PORT' estava em falta
+const app: Express = express();
+const PORT = process.env.PORT || 3001;
 
 // --- MIDDLEWARES GLOBAIS ---
-app.use(cors()); // Permite requisições do seu frontend
-app.use(express.json()); // Habilita o parsing de JSON no body
+app.use(cors()); 
+app.use(express.json()); 
 
 // --- ROTA DE TESTE ---
 app.get('/', (req: Request, res: Response) => {
@@ -32,6 +31,7 @@ app.use('/auth', authRoutes);
 app.use('/ministries', ministryRoutes);
 app.use('/members', memberRoutes);
 app.use('/schedules', scheduleRoutes);
+app.use('/reports', reportRoutes); // <-- ADICIONE ESTA LINHA
 
 
 // --- INICIAR O SERVIDOR ---
