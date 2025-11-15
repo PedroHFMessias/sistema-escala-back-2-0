@@ -4,7 +4,8 @@ import { PrismaClient } from '@prisma/client';
 
 // 1. Importar as nossas novas rotas
 import authRoutes from './routes/auth.js';
-import ministryRoutes from './routes/ministry.js'; // <-- ADICIONE ESTA LINHA
+import ministryRoutes from './routes/ministry.js';
+import memberRoutes from './routes/member.js'; // <-- ADICIONE ESTA LINHA
 
 // 2. Inicializa o Prisma Client
 export const prisma = new PrismaClient();
@@ -27,7 +28,8 @@ app.get('/', (req: Request, res: Response) => {
    =====================================
 */
 app.use('/auth', authRoutes);
-app.use('/ministries', ministryRoutes); // <-- ADICIONE ESTA LINHA
+app.use('/ministries', ministryRoutes);
+app.use('/members', memberRoutes); // <-- ADICIONE ESTA LINHA
 
 
 // 7. Inicia o Servidor
