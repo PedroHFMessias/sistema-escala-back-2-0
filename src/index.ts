@@ -8,6 +8,7 @@ import ministryRoutes from './routes/ministry.js';
 import memberRoutes from './routes/member.js';
 import scheduleRoutes from './routes/schedule.js';
 import reportRoutes from './routes/report.js'; // <-- ADICIONE ESTA LINHA
+import dashboardRoutes from './routes/dashboard.js'
 
 // --- INICIALIZAÇÃO ---
 export const prisma = new PrismaClient();
@@ -32,6 +33,8 @@ app.use('/ministries', ministryRoutes);
 app.use('/members', memberRoutes);
 app.use('/schedules', scheduleRoutes);
 app.use('/reports', reportRoutes); // <-- ADICIONE ESTA LINHA
+app.use('/dashboard', dashboardRoutes);
+
 
 
 // --- INICIAR O SERVIDOR ---

@@ -1,8 +1,7 @@
-// src/routes/auth.ts
+// src/routes/auth.ts (Backend)
 
 import { Router, Request } from 'express';
 import bcrypt from 'bcrypt';
-// Removida a importação 'Prisma' pois não é mais usada sem o /register
 import { prisma } from '../index.js'; 
 import { generateToken } from '../utils/jwt.js';
 import { checkAuth } from '../middleware/authMiddleware.js';
@@ -10,7 +9,6 @@ import { checkAuth } from '../middleware/authMiddleware.js';
 const router = Router();
 
 // --- POST /auth/login ---
-// Corresponde à página LoginPage.tsx
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
 
@@ -19,7 +17,6 @@ router.post('/login', async (req, res) => {
   }
 
   try {
-    // 1. Encontrar o utilizador pelo email
     const user = await prisma.user.findUnique({
       where: { email: email.toLowerCase() },
     });
@@ -28,25 +25,26 @@ router.post('/login', async (req, res) => {
       return res.status(404).json({ message: 'Email ou senha inválidos.' });
     }
 
-    // 2. Comparar a senha
     const isPasswordValid = await bcrypt.compare(password, user.password);
 
     if (!isPasswordValid) {
       return res.status(401).json({ message: 'Email ou senha inválidos.' });
     }
     
-    // 3. Gerar o token
     const token = generateToken({ id: user.id, role: user.role });
 
-    // 4. Enviar a resposta
+    // ⬇️ --- CORREÇÃO AQUI --- ⬇️
+    // Adicionámos 'email: user.email' ao objeto de resposta
     res.json({
       token,
       user: {
         id: user.id,
         name: user.name,
+        email: user.email, // <-- ADICIONADO
         role: user.role,
       },
     });
+    // ⬆️ --- FIM DA CORREÇÃO --- ⬆️
 
   } catch (error) {
     console.error('[login] Erro:', error);
@@ -54,12 +52,7 @@ router.post('/login', async (req, res) => {
   }
 });
 
-
-// --- ENDPOINT /auth/register REMOVIDO CONFORME SOLICITADO ---
-
-
 // --- GET /auth/me ---
-// Rota protegida para buscar dados do utilizador logado (usada pelo Layout.tsx)
 router.get('/me', checkAuth, async (req: Request, res) => {
   const userId = req.user?.id;
 
@@ -83,6 +76,5 @@ router.get('/me', checkAuth, async (req: Request, res) => {
     res.status(500).json({ message: 'Erro ao buscar dados do utilizador.' });
   }
 });
-
 
 export default router;
