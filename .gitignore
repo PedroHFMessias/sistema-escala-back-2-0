@@ -1,5 +1,15 @@
-node_modules
-# Keep environment variables out of version control
+# Ficheiros de Dependências
+node_modules/
+
+# Ficheiros de Build (JavaScript compilado)
+dist/
+
+# Ficheiros de Ambiente (Contém senhas!)
 .env
 
-/src/generated/prisma
+# Logs
+*.log
+npm-debug.log*
+
+# Ficheiros do Sistema Operacional
+.DS_Store

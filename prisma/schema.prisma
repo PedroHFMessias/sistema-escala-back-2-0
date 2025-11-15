@@ -1,121 +1,120 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "mysql"
-  url      = env("DATABASE_URL")
+  url      = env("DATABASE_URL") // Lê a string de conexão do seu ficheiro .env
 }
 
-enum Role {
-  DIRECTOR
-  COORDINATOR
-  VOLUNTEER
-}
-
-enum ScheduleStatus {
-  PENDING
-  CONFIRMED
-  SWAP_REQUESTED
-}
-
-enum ConfirmationStatus {
-  PENDING
-  CONFIRMED
-  DECLINED
-}
-
+// Modelo de Usuários (Membros)
 model User {
-  id        Int      @id @default(autoincrement())
-  name      String
-  email     String   @unique
-  passwordHash String
-  phone     String?
-  cpf       String?  @unique
-  rg        String?
-  role      Role     @default(VOLUNTEER)
-
-  address   Address?
-  ministries UserMinistry[]
-  createdSchedules Schedule[] @relation("CreatedSchedules")
-  scheduleParticipations ScheduleVolunteer[]
-
+  id     String @id @default(uuid())
+  name   String
+  email  String @unique
+  phone  String
+  cpf    String @unique
+  rg     String @unique
+  password String
+  role   UserRole @default(VOLUNTEER)
+  status UserStatus @default(active)
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+
+  address    Address?
+  ministries MinistryMember[]
+  schedulesCreated Schedule[] @relation("CreatedBy")
+  schedules  ScheduleVolunteer[]
 }
 
+// Modelo de Endereços
 model Address {
-  id           Int    @id @default(autoincrement())
+  id           String @id @default(uuid())
+  userId       String @unique
   street       String
-  number       String?
+  number       String
   complement   String?
-  neighborhood String?
+  neighborhood String
   city         String
-  state        String
+  state        String @db.VarChar(2)
   zipCode      String
 
-  userId Int  @unique
-  user   User @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+// Modelo de Ministérios
 model Ministry {
-  id          Int    @id @default(autoincrement())
-  name        String @unique
-  description String?
-  color       String?
-  isActive    Boolean @default(true)
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String   @db.Text
+  color       String   @db.VarChar(10)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
 
-  users     UserMinistry[]
+  members   MinistryMember[]
   schedules Schedule[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 }
 
-model UserMinistry {
-  id          Int  @id @default(autoincrement())
-  userId      Int
-  ministryId  Int
-  isCoordinator Boolean @default(false)
+// Modelo de Ligação (Membros <-> Ministérios)
+model MinistryMember {
+  userId     String
+  ministryId String
 
-  user     User     @relation(fields: [userId], references: [id])
-  ministry Ministry @relation(fields: [ministryId], references: [id])
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ministry Ministry @relation(fields: [ministryId], references: [id], onDelete: Cascade)
 
-  createdAt DateTime @default(now())
-
-  @@unique([userId, ministryId])
+  @@id([userId, ministryId])
 }
 
+// Modelo de Escalas (Eventos)
 model Schedule {
-  id             Int      @id @default(autoincrement())
-  type           String
-  date           DateTime
-  time           String
-  notes          String?
-  
-  createdById    Int
-  createdBy      User @relation("CreatedSchedules", fields: [createdById], references: [id])
+  id          String   @id @default(uuid())
+  type        String   // Ex: "Missa Dominical"
+  date        DateTime @db.Date
+  time        DateTime @db.Time
+  notes       String?  @db.Text
+  ministryId  String
+  createdById String
+  createdAt   DateTime @default(now())
 
-  ministryId     Int
-  ministry       Ministry @relation(fields: [ministryId], references: [id])
-
-  volunteers     ScheduleVolunteer[]
-
-  createdAt      DateTime @default(now())
+  ministry      Ministry            @relation(fields: [ministryId], references: [id])
+  createdBy     User                @relation("CreatedBy", fields: [createdById], references: [id])
+  volunteers    ScheduleVolunteer[]
 }
 
+// Modelo de Participação (Voluntários nas Escalas)
 model ScheduleVolunteer {
-  id                 Int    @id @default(autoincrement())
-  scheduleId         Int
-  volunteerId        Int
-  confirmationStatus ConfirmationStatus @default(PENDING)
-  swapRequested      Boolean @default(false)
+  id         String   @id @default(uuid())
+  scheduleId String
+  volunteerId String
+  status     VolunteerStatus @default(PENDING)
+  requestedChangeReason String?  @db.Text
+  confirmedAt DateTime?
 
-  schedule   Schedule @relation(fields: [scheduleId], references: [id])
-  volunteer  User     @relation(fields: [volunteerId], references: [id])
+  schedule  Schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  volunteer User     @relation(fields: [volunteerId], references: [id], onDelete: Cascade)
 
-  createdAt  DateTime @default(now())
-
-  @@unique([scheduleId, volunteerId])
+  @@unique([scheduleId, volunteerId], name: "schedule_volunteer_unique")
 }
 
+
+// --- Enums ---
+
+enum UserRole {
+  VOLUNTEER
+  COORDINATOR
+  DIRECTOR
+}
+
+enum UserStatus {
+  active
+  inactive
+}
+
+enum VolunteerStatus {
+  PENDING
+  CONFIRMED
+  EXCHANGE_REQUESTED
+}

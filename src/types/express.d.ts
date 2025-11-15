@@ -1,18 +1,17 @@
-import { Role } from "@prisma/client";
+// src/types/express.d.ts
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { Request } from 'express';
+
+// Isto "aumenta" a definição global do Express
 declare global {
   namespace Express {
-    interface UserPayload {
-      id: number;
-      name: string;
-      email: string;
-      role: Role;
-    }
-
-    interface Request {
-      user?: UserPayload;
+    export interface Request {
+      // Adiciona a propriedade 'user' opcional ao objeto Request
+      user?: {
+        id: string;
+        role: string;
+      };
     }
   }
 }
-
-export {};

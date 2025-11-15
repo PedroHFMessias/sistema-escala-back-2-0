@@ -1,16 +1,18 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
-    "module": "CommonJS",
-    "rootDir": "src",
-    "outDir": "dist",
-    "esModuleInterop": true,
-    "strict": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
+    /* Configurações Base */
+    "target": "ES2022",                // Compila para JavaScript moderno
+    "module": "NodeNext",             // Usa o sistema de módulos mais recente do Node.js
+    "moduleResolution": "NodeNext",   // Resolve módulos da forma como o Node.js (ESM) faz
+    "outDir": "./dist",               // Onde o JavaScript compilado será guardado
+    "rootDir": "./src",               // Onde o nosso código TypeScript está
+    "esModuleInterop": true,          // Permite compatibilidade entre módulos CommonJS e ES
+    "forceConsistentCasingInFileNames": true, // Garante que os nomes dos ficheiros são consistentes
+
+    /* Verificações Rigorosas */
+    "strict": true,                   // Ativa todas as verificações rigorosas
+    "skipLibCheck": true              // Pula a verificação de tipos em ficheiros .d.ts (acelera a compilação)
   },
-  "include": [
-    "src",
-    "src/types"
-]
+  "include": ["src/**/*"], // Diz ao TypeScript para compilar tudo dentro da pasta 'src'
+  "exclude": ["node_modules"] // Ignora a pasta node_modules
 }
