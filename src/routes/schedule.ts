@@ -50,11 +50,9 @@ router.get('/management', checkAuth, checkRole(['DIRECTOR', 'COORDINATOR']), asy
       orderBy: { date: 'desc' }
     });
 
-    // Formata a resposta para o frontend (ScheduleManagementPage.tsx)
     const formattedSchedules = schedules.map(s => ({
       id: s.id,
-      date: s.date.toISOString().split('T')[0], // Envia apenas YYYY-MM-DD
-      // Converte a data/hora do DB (que é UTC 1970-01-01T...) para HH:MM
+      date: s.date.toISOString().split('T')[0],
       time: s.time.toISOString().substring(11, 16), 
       type: s.type,
       ministry: s.ministry.name,
@@ -75,7 +73,6 @@ router.get('/management', checkAuth, checkRole(['DIRECTOR', 'COORDINATOR']), asy
     res.status(500).json({ message: 'Erro ao buscar escalas para gestão.' });
   }
 });
-
 
 // --- POST /schedules/management ---
 router.post('/management', checkAuth, checkRole(['DIRECTOR', 'COORDINATOR']), async (req: Request, res) => {
@@ -98,23 +95,15 @@ router.post('/management', checkAuth, checkRole(['DIRECTOR', 'COORDINATOR']), as
         return res.status(403).json({ message: 'Não tem permissão para criar escalas para este ministério.' });
       }
     }
-
-    // ⬇️ --- CORREÇÃO APLICADA AQUI --- ⬇️
-    // Prisma (com MySQL @db.Date) espera um objeto Date.
-    // Para evitar problemas de fuso horário (ex: guardar dia 24 em vez de 25),
-    // forçamos a data a ser interpretada como Meia-Noite UTC.
+    
     const dateAsUTC = new Date(`${date}T00:00:00.000Z`);
-
-    // Prisma (com MySQL @db.Time) espera um DateTime.
-    // Usamos a data "base" (Epoch) mas com a hora fornecida, em UTC.
     const timeAsUTC = new Date(`1970-01-01T${time}:00.000Z`);
-    // ⬆️ --- FIM DA CORREÇÃO --- ⬆️
 
     const newSchedule = await prisma.schedule.create({
       data: {
         type,
-        date: dateAsUTC, // Corrigido
-        time: timeAsUTC, // Corrigido
+        date: dateAsUTC,
+        time: timeAsUTC,
         notes,
         ministryId,
         createdById: loggedInUser.id,
@@ -135,35 +124,31 @@ router.post('/management', checkAuth, checkRole(['DIRECTOR', 'COORDINATOR']), as
   }
 });
 
-
 // --- PUT /schedules/management/:id ---
 router.put('/management/:id', checkAuth, checkRole(['DIRECTOR', 'COORDINATOR']), async (req: Request, res) => {
   const { id } = req.params;
   const { type, date, time, ministryId, volunteers: volunteerIds, notes } = req.body;
-  const loggedInUser = req.user!;
+
+  if (!type || !date || !time || !ministryId || !volunteerIds?.length) {
+    return res.status(400).json({ message: 'Campos obrigatórios em falta.' });
+  }
 
   try {
-    // (Pode adicionar a verificação de permissão do Coordenador aqui também)
-
-    // ⬇️ --- CORREÇÃO APLICADA AQUI (igual ao POST) --- ⬇️
     const dateAsUTC = new Date(`${date}T00:00:00.000Z`);
     const timeAsUTC = new Date(`1970-01-01T${time}:00.000Z`);
-    // ⬆️ --- FIM DA CORREÇÃO --- ⬆️
 
     await prisma.$transaction(async (tx) => {
-      // 1. Atualiza os dados da escala principal
       await tx.schedule.update({
         where: { id },
         data: {
           type,
-          date: dateAsUTC, // Corrigido
-          time: timeAsUTC, // Corrigido
+          date: dateAsUTC,
+          time: timeAsUTC,
           notes,
           ministryId,
         },
       });
 
-      // 2. Obtém os voluntários *atuais* desta escala
       const currentVolunteers = await tx.scheduleVolunteer.findMany({
         where: { scheduleId: id },
         select: { volunteerId: true }
@@ -171,11 +156,9 @@ router.put('/management/:id', checkAuth, checkRole(['DIRECTOR', 'COORDINATOR']),
       const currentVolunteerIds = currentVolunteers.map(v => v.volunteerId);
       const newVolunteerIds = (volunteerIds as string[]);
 
-      // 3. Determina quem remover e quem adicionar
       const toRemove = currentVolunteerIds.filter(vid => !newVolunteerIds.includes(vid));
       const toAdd = newVolunteerIds.filter(vid => !currentVolunteerIds.includes(vid));
 
-      // 4. Remove os que já não estão na lista
       await tx.scheduleVolunteer.deleteMany({
         where: {
           scheduleId: id,
@@ -183,13 +166,13 @@ router.put('/management/:id', checkAuth, checkRole(['DIRECTOR', 'COORDINATOR']),
         },
       });
 
-      // 5. Adiciona os novos
       await tx.scheduleVolunteer.createMany({
         data: toAdd.map(volId => ({
           scheduleId: id,
           volunteerId: volId,
           status: 'PENDING',
         })),
+        skipDuplicates: true,
       });
     });
 
@@ -199,7 +182,6 @@ router.put('/management/:id', checkAuth, checkRole(['DIRECTOR', 'COORDINATOR']),
     res.status(500).json({ message: 'Erro ao atualizar escala.' });
   }
 });
-
 
 // --- DELETE /schedules/management/:id ---
 router.delete('/management/:id', checkAuth, checkRole(['DIRECTOR', 'COORDINATOR']), async (req: Request, res) => {
@@ -218,6 +200,241 @@ router.delete('/management/:id', checkAuth, checkRole(['DIRECTOR', 'COORDINATOR'
 });
 
 
+/**
+ * ========================================
+ * ROTAS DO VOLUNTÁRIO
+ * ========================================
+ */
+
+// --- GET /schedules/my ---
+router.get('/my', checkAuth, checkRole(['VOLUNTEER']), async (req: Request, res) => {
+  const loggedInVolunteerId = req.user!.id;
+
+  try {
+    const participations = await prisma.scheduleVolunteer.findMany({
+      where: { volunteerId: loggedInVolunteerId },
+      include: {
+        schedule: {
+          include: {
+            ministry: {
+              select: { name: true }
+            }
+          }
+        }
+      },
+      orderBy: {
+        schedule: { date: 'asc' }
+      }
+    });
+
+    const formattedSchedules = participations.map(p => ({
+      id: p.id,
+      scheduleId: p.scheduleId,
+      date: p.schedule.date.toISOString().split('T')[0],
+      time: p.schedule.time.toISOString().substring(11, 16),
+      type: p.schedule.type,
+      ministry: p.schedule.ministry.name,
+      status: p.status.toLowerCase(),
+      notes: p.schedule.notes,
+      requestedChangeReason: p.requestedChangeReason
+    }));
+
+    res.json(formattedSchedules);
+
+  } catch (error) {
+    console.error('[schedules/my GET]', error);
+    res.status(500).json({ message: 'Erro ao buscar "minhas escalas".' });
+  }
+});
+
+// --- GET /schedules/my/confirmations ---
+router.get('/my/confirmations', checkAuth, checkRole(['VOLUNTEER']), async (req: Request, res) => {
+  const loggedInVolunteerId = req.user!.id;
+
+  try {
+    const participations = await prisma.scheduleVolunteer.findMany({
+      where: { 
+        volunteerId: loggedInVolunteerId,
+        status: 'CONFIRMED'
+      },
+      include: {
+        schedule: {
+          include: {
+            ministry: {
+              select: { name: true }
+            }
+          }
+        }
+      },
+      orderBy: { schedule: { date: 'asc' } }
+    });
+
+    const formattedSchedules = participations.map(p => ({
+      id: p.id,
+      scheduleId: p.scheduleId,
+      date: p.schedule.date.toISOString().split('T')[0],
+      time: p.schedule.time.toISOString().substring(11, 16),
+      type: p.schedule.type,
+      ministry: p.schedule.ministry.name,
+      status: p.status.toLowerCase(),
+      notes: p.schedule.notes
+    }));
+
+    res.json(formattedSchedules);
+  } catch (error) {
+    console.error('[schedules/my/confirmations GET]', error);
+    res.status(500).json({ message: 'Erro ao buscar confirmações.' });
+  }
+});
+
+
+// --- PUT /schedules/participation/:id/confirm ---
+router.put('/participation/:id/confirm', checkAuth, checkRole(['VOLUNTEER']), async (req: Request, res) => {
+  const participationId = req.params.id;
+  const loggedInVolunteerId = req.user!.id;
+
+  try {
+    // ⬇️ --- LÓGICA DE SEGURANÇA ATUALIZADA --- ⬇️
+    // Só permite a atualização se o status for PENDING
+    const updatedParticipation = await prisma.scheduleVolunteer.updateMany({
+      where: {
+        id: participationId,
+        volunteerId: loggedInVolunteerId,
+        status: 'PENDING' // <-- SÓ ATUALIZA SE ESTIVER PENDENTE
+      },
+      data: {
+        status: 'CONFIRMED',
+        requestedChangeReason: null,
+        confirmedAt: new Date(),
+      }
+    });
+    
+    // Se count for 0, significa que a atualização falhou
+    if (updatedParticipation.count === 0) {
+        // Verifica o porquê
+        const participation = await prisma.scheduleVolunteer.findFirst({
+            where: { id: participationId, volunteerId: loggedInVolunteerId }
+        });
+
+        if (!participation) {
+            return res.status(404).json({ message: 'Participação não encontrada ou não pertence a este utilizador.'});
+        }
+        
+        // Se encontrou, mas não atualizou, é porque o status estava errado
+        if (participation.status === 'CONFIRMED') {
+            return res.status(400).json({ message: 'Escala já está confirmada.' });
+        }
+        
+        if (participation.status === 'EXCHANGE_REQUESTED') {
+            return res.status(400).json({ message: 'Não é possível confirmar. A troca já foi solicitada.' });
+        }
+    }
+    // ⬆️ --- FIM DA ATUALIZAÇÃO --- ⬆️
+
+    res.json({ message: 'Participação confirmada com sucesso!' });
+  } catch (error) {
+    console.error('[schedules/confirm PUT]', error);
+    res.status(500).json({ message: 'Erro ao confirmar participação.' });
+  }
+});
+
+
+// --- PUT /schedules/participation/:id/request-change ---
+router.put('/participation/:id/request-change', checkAuth, checkRole(['VOLUNTEER']), async (req: Request, res) => {
+  const participationId = req.params.id;
+  const loggedInVolunteerId = req.user!.id;
+  const { justificationMessage } = req.body;
+
+  try {
+    // ⬇️ --- LÓGICA DE SEGURANÇA ATUALIZADA --- ⬇️
+    // Só permite a atualização se o status for PENDING
+    const updatedParticipation = await prisma.scheduleVolunteer.updateMany({
+      where: {
+        id: participationId,
+        volunteerId: loggedInVolunteerId,
+        status: 'PENDING' // <-- SÓ ATUALIZA SE ESTIVER PENDENTE
+      },
+      data: {
+        status: 'EXCHANGE_REQUESTED',
+        requestedChangeReason: justificationMessage || null,
+        confirmedAt: null,
+      }
+    });
+
+    if (updatedParticipation.count === 0) {
+        // Verifica o porquê
+        const participation = await prisma.scheduleVolunteer.findFirst({
+            where: { id: participationId, volunteerId: loggedInVolunteerId }
+        });
+
+        if (!participation) {
+            return res.status(404).json({ message: 'Participação não encontrada ou não pertence a este utilizador.'});
+        }
+        
+        // Se encontrou, mas não atualizou
+        if (participation.status === 'CONFIRMED') {
+            return res.status(400).json({ message: 'Não é possível solicitar troca de uma escala já confirmada.' });
+        }
+        
+        if (participation.status === 'EXCHANGE_REQUESTED') {
+            return res.status(400).json({ message: 'Troca já solicitada.' });
+        }
+    }
+    // ⬆️ --- FIM DA ATUALIZAÇÃO --- ⬆️
+
+    res.json({ message: 'Solicitação de troca enviada com sucesso!' });
+  } catch (error) {
+    console.error('[schedules/request-change PUT]', error);
+    res.status(500).json({ message: 'Erro ao solicitar troca.' });
+  }
+});
+
+
+/**
+ * ========================================
+ * ROTA PÚBLICA (Partilhada)
+ * ========================================
+ */
+
+// --- GET /schedules/all ---
+router.get('/all', checkAuth, async (req: Request, res) => {
+  try {
+    const participations = await prisma.scheduleVolunteer.findMany({
+      include: {
+        volunteer: { 
+          select: { name: true }
+        },
+        schedule: {
+          include: {
+            ministry: {
+              select: { name: true }
+            }
+          }
+        }
+      },
+      orderBy: {
+        schedule: { date: 'asc' }
+      }
+    });
+
+    // Formata os dados como a ScheduleViewPage.tsx espera
+    const formattedData = participations.map(p => ({
+        id: p.id,
+        date: p.schedule.date.toISOString().split('T')[0],
+        time: p.schedule.time.toISOString().substring(11, 16),
+        type: p.schedule.type,
+        ministry: p.schedule.ministry.name,
+        volunteer: p.volunteer.name,
+        status: p.status.toLowerCase(),
+    }));
+
+    res.json(formattedData);
+
+  } catch (error) {
+    console.error('[schedules/all GET]', error);
+    res.status(500).json({ message: 'Erro ao buscar todas as escalas.' });
+  }
+});
 
 
 export default router;
