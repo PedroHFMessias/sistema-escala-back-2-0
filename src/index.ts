@@ -1,38 +1,40 @@
+// src/index.ts
+
 import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
 
-// 1. Importar as nossas novas rotas
+// --- IMPORTAÇÃO DAS ROTAS ---
 import authRoutes from './routes/auth.js';
 import ministryRoutes from './routes/ministry.js';
-import memberRoutes from './routes/member.js'; // <-- ADICIONE ESTA LINHA
+import memberRoutes from './routes/member.js';
+import scheduleRoutes from './routes/schedule.js';
 
-// 2. Inicializa o Prisma Client
+// --- INICIALIZAÇÃO ---
 export const prisma = new PrismaClient();
+const app: Express = express(); // <-- A definição de 'app' estava em falta
+const PORT = process.env.PORT || 3001; // <-- A definição de 'PORT' estava em falta
 
-// 3. Inicializa o Express
-const app: Express = express();
-const PORT = process.env.PORT || 3001;
+// --- MIDDLEWARES GLOBAIS ---
+app.use(cors()); // Permite requisições do seu frontend
+app.use(express.json()); // Habilita o parsing de JSON no body
 
-// 4. Configura os Middlewares
-app.use(cors());
-app.use(express.json());
-
-// 5. Rota de Teste
+// --- ROTA DE TESTE ---
 app.get('/', (req: Request, res: Response) => {
   res.send('Backend do Sistema de Escalas está rodando!');
 });
 
 /* =====================================
-   REGISTO DAS ROTAS
+   REGISTO DE TODAS AS ROTAS DA API
    =====================================
 */
 app.use('/auth', authRoutes);
 app.use('/ministries', ministryRoutes);
-app.use('/members', memberRoutes); // <-- ADICIONE ESTA LINHA
+app.use('/members', memberRoutes);
+app.use('/schedules', scheduleRoutes);
 
 
-// 7. Inicia o Servidor
+// --- INICIAR O SERVIDOR ---
 app.listen(PORT, () => {
   console.log(`[server]: Servidor rodando em http://localhost:${PORT} ⚡`);
 });
